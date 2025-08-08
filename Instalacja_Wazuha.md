@@ -1,2 +1,2 @@
-curl -sO https://packages.wazuh.com/4.9/wazuh-install.sh &&
+curl -sO https://packages.wazuh.com/(WybraćWersjęEx4.10/wazuh-install.sh &&
 sudo bash ./wazuh-install.sh -a
