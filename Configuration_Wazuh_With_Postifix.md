@@ -1,71 +1,63 @@
-# 📬 Konfiguracja Postfix jako klient SMTP relay
+# Konfiguracja Wazuh + Postfix (SMTP Relay przez smtp.dpanel.pl)
 
-Ten poradnik pokazuje, jak skonfigurować **Postfix** do wysyłania poczty przez zewnętrzny serwer SMTP (relay).  
-Przydatne jako szybka ściąga.
+Ten poradnik opisuje kompletną konfigurację **Postfix** tak, aby Wazuh mógł wysyłać powiadomienia e-mail,
+a Postfix przekazywał je dalej przez serwer SMTP `smtp.dpanel.pl` z uwierzytelnieniem i TLS.
 
 ---
 
-## 1️⃣ Instalacja Postfix
-
+## 1. Instalacja Postfix
 ```bash
 sudo apt update
-sudo apt install postfix mailutils
+sudo apt install postfix mailutils ca-certificates
 ```
 
-Podczas instalacji wybierz **Internet Site**.
+Podczas instalacji wybierz:
 
-> 💡 **Uwaga:** Jeżeli przez pomyłkę wybrałeś *System rozproszony* zamiast *Internet Site*, możesz później zmienić konfigurację poleceniem:
+- **General type of mail configuration**: `Internet Site`
+- **System mail name**: `twojadomena.pl` (np. `zukrawicz.pl`)
+- **Root and postmaster mail recipient**: Twój e-mail (np. `admin@twojadomena.pl`)
+- **Local networks**: zostaw domyślne (`127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128`)
+- **Mailbox size limit**: `0`
+- **Local address extension character**: `+`
+- **Internet protocols**: `ipv4`
+
+> Jeśli wybrałeś wcześniej `System rozproszony`, uruchom:
 > ```bash
 > sudo dpkg-reconfigure postfix
 > ```
-> i wybrać poprawną opcję.
+> i zmień na `Internet Site`.
 
 ---
 
-## 2️⃣ Podstawowa konfiguracja Postfix
-
-Otwórz główny plik konfiguracyjny:
-
-```bash
-sudo nano /etc/postfix/main.cf
-```
-
-Dodaj lub zmodyfikuj poniższe linie (zastąp `smtp.twojserwer.pl` swoim serwerem SMTP):
+## 2. Konfiguracja relayhost (smtp.dpanel.pl)
+Edytuj plik `/etc/postfix/main.cf` i upewnij się, że masz poniższe wpisy:
 
 ```ini
-relayhost = [smtp.twojserwer.pl]:587
-smtp_use_tls = yes
+# Główna konfiguracja
+relayhost = [smtp.dpanel.pl]:587
+
+# Uwierzytelnianie SMTP
 smtp_sasl_auth_enable = yes
-smtp_sasl_security_options = noanonymous
 smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+smtp_sasl_security_options = noanonymous
+smtp_sasl_tls_security_options = noanonymous
+
+# TLS
+smtp_use_tls = yes
+smtp_tls_security_level = encrypt
 smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt
 ```
 
-> ℹ️ **Porty SMTP:**
-> - `587` – SMTP z TLS (zalecany)  
-> - `465` – SMTP z SSL  
-> - `25` – zwykły SMTP (często blokowany przez dostawców)
-
 ---
 
-## 3️⃣ Ustaw dane logowania do serwera SMTP
-
-Utwórz plik z loginem i hasłem:
+## 3. Uwierzytelnienie (login i hasło)
+Utwórz plik `/etc/postfix/sasl_passwd`:
 
 ```bash
-sudo nano /etc/postfix/sasl_passwd
+[smtp.dpanel.pl]:587 user@twojadomena.pl:TwojeHasloSMTP
 ```
 
-Dodaj:
-
-```txt
-[smtp.twojserwer.pl]:587 login@domena.pl:TwojeHaslo
-```
-
----
-
-## 4️⃣ Zabezpieczenie pliku i generowanie mapy
-
+Nadaj odpowiednie uprawnienia i utwórz mapę hash:
 ```bash
 sudo chmod 600 /etc/postfix/sasl_passwd
 sudo postmap /etc/postfix/sasl_passwd
@@ -73,92 +65,54 @@ sudo postmap /etc/postfix/sasl_passwd
 
 ---
 
-## 5️⃣ Restart Postfix
-
+## 4. Załaduj nową konfigurację
 ```bash
 sudo systemctl restart postfix
+sudo systemctl enable postfix
 ```
 
 ---
 
-## 6️⃣ Test wysyłki wiadomości
-
+## 5. Test wysyłki
 ```bash
-echo "Testowa wiadomość" | mail -s "Test SMTP Postfix" twojmail@adres.pl
+echo "Test Wazuh -> Postfix -> smtp.dpanel.pl" | mail -s "Test e-mail" twojemail@domena.pl
 ```
 
----
-
-## 7️⃣ Sprawdzanie kolejki i logów
-
-Jeżeli mail nie dochodzi:
-
+Sprawdź logi, jeśli e-mail nie dotrze:
 ```bash
-mailq
-sudo tail -n 50 /var/log/mail.log
+sudo tail -f /var/log/mail.log
 ```
-
-W logach znajdziesz informacje o błędach (np. zły login, port, problem z TLS).
 
 ---
 
-## 8️⃣ (Opcjonalnie) Ustawienie nadawcy na stały adres
-
-Dodaj do `main.cf`:
-
-```ini
-sender_canonical_maps = hash:/etc/postfix/sender_canonical
+## 6. Podłączenie Wazuh do Postfixa
+W pliku konfiguracyjnym Wazuh (`/var/ossec/etc/ossec.conf`) ustaw:
+```xml
+<global>
+  <smtp_server>localhost</smtp_server>
+  <email_from>wazuh@twojadomena.pl</email_from>
+  <email_to>twojemail@domena.pl</email_to>
+  <email_maxperhour>12</email_maxperhour>
+</global>
 ```
 
-Utwórz plik:
+Wazuh będzie wysyłał maile na `localhost:25`, a Postfix przekieruje je do `smtp.dpanel.pl`.
 
+---
+
+## 7. Sprawdzenie certyfikatu smtp.dpanel.pl (opcjonalnie)
+Aby upewnić się, że certyfikat jest podpisany przez zaufane CA:
 ```bash
-sudo nano /etc/postfix/sender_canonical
+echo | openssl s_client -connect smtp.dpanel.pl:587 -starttls smtp 2>/dev/null | openssl x509 -noout -issuer -subject
 ```
 
-Przykład zawartości:
+Jeżeli w polu **issuer** jest np. "Let's Encrypt" lub inny znany CA, to jest on w `/etc/ssl/certs/ca-certificates.crt`.
 
-```txt
-root@localhost login@domena.pl
-```
+---
 
-Potem:
-
+## 8. Uwagi końcowe
+- Plik `smtp_tls_CAfile` nie jest zawsze wymagany, ale warto go ustawić, by mieć pewność, że Postfix wie, gdzie szukać certyfikatów CA.
+- Po każdej zmianie w `main.cf` wykonuj:
 ```bash
-sudo postmap /etc/postfix/sender_canonical
-sudo systemctl restart postfix
+sudo systemctl reload postfix
 ```
-
----
-
-## 9️⃣ (Opcjonalnie) Konfiguracja SSL/TLS na porcie 465
-
-Jeżeli serwer wymaga połączenia SSL:
-
-W `main.cf`:
-
-```ini
-relayhost = [smtp.twojserwer.pl]:465
-smtp_use_tls = yes
-smtp_tls_wrappermode = yes
-```
-
-W `sasl_passwd`:
-
-```txt
-[smtp.twojserwer.pl]:465 login@domena.pl:TwojeHaslo
-```
-
----
-
-## 🔟 (Opcjonalnie) Czyszczenie kolejki
-
-Aby usunąć wszystkie maile z kolejki:
-
-```bash
-sudo postsuper -d ALL
-```
-
----
-
-✅ **Gotowe!** Postfix jest skonfigurowany do wysyłania poczty przez wybrany serwer SMTP.
