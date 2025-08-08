@@ -14,7 +14,7 @@ sudo apt install postfix mailutils ca-certificates
 Podczas instalacji wybierz:
 
 - **General type of mail configuration**: `Internet Site`
-- **System mail name**: `twojadomena.pl` (np. `zukrawicz.pl`)
+- **System mail name**: `twojadomena.pl` (np. `mojadomena.pl`)
 - **Root and postmaster mail recipient**: Twój e-mail (np. `admin@twojadomena.pl`)
 - **Local networks**: zostaw domyślne (`127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128`)
 - **Mailbox size limit**: `0`
