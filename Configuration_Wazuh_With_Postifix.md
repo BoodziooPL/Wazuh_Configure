@@ -1,7 +1,7 @@
-# Konfiguracja Wazuh + Postfix (SMTP Relay przez smtp.dpanel.pl)
+# Konfiguracja Wazuh + Postfix (SMTP Relay przez smtp.server.pl)
 
 Ten poradnik opisuje kompletną konfigurację **Postfix** tak, aby Wazuh mógł wysyłać powiadomienia e-mail,
-a Postfix przekazywał je dalej przez serwer SMTP `smtp.dpanel.pl` z uwierzytelnieniem i TLS.
+a Postfix przekazywał je dalej przez serwer SMTP `smtp.server.pl` z uwierzytelnieniem i TLS.
 
 ---
 
@@ -14,7 +14,7 @@ sudo apt install postfix mailutils ca-certificates
 Podczas instalacji wybierz:
 
 - **General type of mail configuration**: `Internet Site`
-- **System mail name**: `twojadomena.pl` (np. `mojadomena.pl`)
+- **System mail name**: `twojadomena.pl` (np. `zukrawicz.pl`)
 - **Root and postmaster mail recipient**: Twój e-mail (np. `admin@twojadomena.pl`)
 - **Local networks**: zostaw domyślne (`127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128`)
 - **Mailbox size limit**: `0`
@@ -29,12 +29,12 @@ Podczas instalacji wybierz:
 
 ---
 
-## 2. Konfiguracja relayhost (smtp.dpanel.pl)
+## 2. Konfiguracja relayhost (smtp.server.pl)
 Edytuj plik `/etc/postfix/main.cf` i upewnij się, że masz poniższe wpisy:
 
 ```ini
 # Główna konfiguracja
-relayhost = [smtp.dpanel.pl]:587
+relayhost = [smtp.server.pl]:587
 
 # Uwierzytelnianie SMTP
 smtp_sasl_auth_enable = yes
@@ -54,7 +54,7 @@ smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt
 Utwórz plik `/etc/postfix/sasl_passwd`:
 
 ```bash
-[smtp.dpanel.pl]:587 user@twojadomena.pl:TwojeHasloSMTP
+[smtp.server.pl]:587 user@twojadomena.pl:TwojeHasloSMTP
 ```
 
 Nadaj odpowiednie uprawnienia i utwórz mapę hash:
@@ -75,7 +75,7 @@ sudo systemctl enable postfix
 
 ## 5. Test wysyłki
 ```bash
-echo "Test Wazuh -> Postfix -> smtp.dpanel.pl" | mail -s "Test e-mail" twojemail@domena.pl
+echo "Test Wazuh -> Postfix -> smtp.server.pl" | mail -s "Test e-mail" twojemail@domena.pl
 ```
 
 Sprawdź logi, jeśli e-mail nie dotrze:
@@ -96,14 +96,14 @@ W pliku konfiguracyjnym Wazuh (`/var/ossec/etc/ossec.conf`) ustaw:
 </global>
 ```
 
-Wazuh będzie wysyłał maile na `localhost:25`, a Postfix przekieruje je do `smtp.dpanel.pl`.
+Wazuh będzie wysyłał maile na `localhost:25`, a Postfix przekieruje je do `smtp.server.pl`.
 
 ---
 
-## 7. Sprawdzenie certyfikatu smtp.dpanel.pl (opcjonalnie)
+## 7. Sprawdzenie certyfikatu smtp.server.pl (opcjonalnie)
 Aby upewnić się, że certyfikat jest podpisany przez zaufane CA:
 ```bash
-echo | openssl s_client -connect smtp.dpanel.pl:587 -starttls smtp 2>/dev/null | openssl x509 -noout -issuer -subject
+echo | openssl s_client -connect smtp.server.pl:587 -starttls smtp 2>/dev/null | openssl x509 -noout -issuer -subject
 ```
 
 Jeżeli w polu **issuer** jest np. "Let's Encrypt" lub inny znany CA, to jest on w `/etc/ssl/certs/ca-certificates.crt`.
