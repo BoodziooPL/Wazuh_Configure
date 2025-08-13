@@ -94,6 +94,7 @@ iptables -A INPUT -i lo -j ACCEPT
 iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 iptables -A INPUT -p tcp --dport 1514 -j ACCEPT
+iptables -A INPUT -p tcp --dport 1515 -j ACCEPT
 iptables -A INPUT -p tcp --dport 55000 -j ACCEPT
 iptables -A INPUT -p tcp --dport 9200 -j ACCEPT
 iptables -A INPUT -p tcp --dport 443 -j ACCEPT
